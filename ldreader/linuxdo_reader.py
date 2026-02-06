@@ -144,6 +144,8 @@ def build_timings_payload(
 def request_page(session: requests.Session, url: str) -> str:
     try:
         response = session.get(url)
+        if response.status_code == 403:
+            raise ReaderError("获取页面失败: 403，可能触发了 Cloudflare 验证，请先在浏览器通过验证后使用 Cookie 登录")
         if not response.ok:
             raise ReaderError(f"获取页面失败: HTTP {response.status_code}")
         return response.text
@@ -169,6 +171,8 @@ def send_timings(
     for attempt in range(retries + 1):
         try:
             response = session.post(timings_url, data=payload, headers=headers)
+            if response.status_code == 403:
+                raise ReaderError("发送 timings 失败: 403，可能触发了 Cloudflare 验证，请先在浏览器通过验证后使用 Cookie 登录")
             if response.ok:
                 return
             if attempt < retries:

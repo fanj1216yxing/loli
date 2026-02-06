@@ -33,6 +33,8 @@ python ldreader/linuxdo_reader.py \
 
 如果代理不可用（例如本地代理端口未开启），程序会提示“代理连接失败”。此时请检查代理地址或去掉 `--proxy` 参数。
 
+如果返回 403，可能触发了 Cloudflare 验证。请先在浏览器手动通过验证并登录后，再将浏览器 Cookie 传给脚本（`--cookie` 或 `--cookie-file`），或直接移除 `--username/--password` 并仅使用 Cookie。
+
 ### 可选参数示例
 
 ```bash
