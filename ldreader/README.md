@@ -31,6 +31,8 @@ python ldreader/linuxdo_reader.py \
   --max-topics 50
 ```
 
+如果代理不可用（例如本地代理端口未开启），程序会提示“代理连接失败”。此时请检查代理地址或去掉 `--proxy` 参数。
+
 ### 可选参数示例
 
 ```bash

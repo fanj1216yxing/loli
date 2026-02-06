@@ -142,10 +142,15 @@ def build_timings_payload(
 
 
 def request_page(session: requests.Session, url: str) -> str:
-    response = session.get(url)
-    if not response.ok:
-        raise ReaderError(f"获取页面失败: HTTP {response.status_code}")
-    return response.text
+    try:
+        response = session.get(url)
+        if not response.ok:
+            raise ReaderError(f"获取页面失败: HTTP {response.status_code}")
+        return response.text
+    except requests.exceptions.ProxyError as error:
+        raise ReaderError("代理连接失败，请检查代理地址或关闭代理") from error
+    except requests.exceptions.RequestException as error:
+        raise ReaderError(f"请求失败: {error}") from error
 
 
 def send_timings(
@@ -162,13 +167,21 @@ def send_timings(
     }
     timings_url = urljoin(base_url.rstrip("/") + "/", "topics/timings")
     for attempt in range(retries + 1):
-        response = session.post(timings_url, data=payload, headers=headers)
-        if response.ok:
-            return
-        if attempt < retries:
-            time.sleep(2)
-            continue
-        raise ReaderError(f"发送 timings 失败: HTTP {response.status_code}")
+        try:
+            response = session.post(timings_url, data=payload, headers=headers)
+            if response.ok:
+                return
+            if attempt < retries:
+                time.sleep(2)
+                continue
+            raise ReaderError(f"发送 timings 失败: HTTP {response.status_code}")
+        except requests.exceptions.ProxyError as error:
+            raise ReaderError("代理连接失败，请检查代理地址或关闭代理") from error
+        except requests.exceptions.RequestException as error:
+            if attempt < retries:
+                time.sleep(2)
+                continue
+            raise ReaderError(f"请求失败: {error}") from error
 
 
 def create_session(args: argparse.Namespace) -> requests.Session:
