@@ -1,6 +1,6 @@
 # Linux.do 自动阅读程序（Python）
 
-该脚本基于 Discourse 的 `/topics/timings` 接口，模拟阅读帖子的回复数量。它需要登录后的 Cookie 才能正常提交请求。
+该脚本基于 Discourse 的 `/topics/timings` 接口，模拟阅读帖子的回复数量。支持遍览新帖子循环阅读，并可通过账号密码登录与代理访问。
 
 ## 安装依赖
 
@@ -10,17 +10,32 @@ pip install requests
 
 ## 使用方式
 
+### 单个帖子
+
 ```bash
 python ldreader/linuxdo_reader.py \
-  "https://linux.do/t/帖子标题/12345" \
+  --topic-url "https://linux.do/t/帖子标题/12345" \
   --cookie "_forum_session=...; ..."
 ```
 
-可选参数示例：
+### 遍览新帖子循环阅读
 
 ```bash
 python ldreader/linuxdo_reader.py \
-  "https://linux.do/t/帖子标题/12345" \
+  --scan-new \
+  --base-url "https://linux.do" \
+  --username "your_user" \
+  --password "your_pass" \
+  --proxy "http://user:pass@host:port" \
+  --loop-delay 60 \
+  --max-topics 50
+```
+
+### 可选参数示例
+
+```bash
+python ldreader/linuxdo_reader.py \
+  --topic-url "https://linux.do/t/帖子标题/12345" \
   --cookie-file ./cookie.txt \
   --base-delay 2500 \
   --random-delay 800 \
