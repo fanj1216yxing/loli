@@ -30,6 +30,7 @@ class ReadConfig:
     start_from_current: bool
     dry_run: bool
     open_403: bool
+    webview_403: bool
 
 
 def parse_args() -> argparse.Namespace:
@@ -85,6 +86,11 @@ def parse_args() -> argparse.Namespace:
         "--open-403",
         action="store_true",
         help="遇到 403 时自动打开浏览器页面，便于手动通过验证",
+    )
+    parser.add_argument(
+        "--webview-403",
+        action="store_true",
+        help="遇到 403 时使用内置 WebView 打开页面（需要安装 pywebview）",
     )
     parser.add_argument("--loop-delay", type=int, default=60, help="循环间隔秒数")
     parser.add_argument("--max-cycles", type=int, default=0, help="最大循环次数（0=无限）")
@@ -148,21 +154,33 @@ def build_timings_payload(
     return payload
 
 
-def handle_403(url: str, open_403: bool) -> None:
+def open_webview(url: str) -> None:
+    try:
+        import webview
+    except ImportError as error:
+        raise ReaderError("未安装 pywebview，无法使用内置 WebView。请先安装 pywebview 或改用 --open-403") from error
+    webview.create_window("Cloudflare 验证", url)
+    webview.start()
+
+
+def handle_403(url: str, open_403: bool, webview_403: bool) -> None:
     message = "获取页面失败: 403，可能触发了 Cloudflare 验证，请先在浏览器通过验证后使用 Cookie 登录"
     print(message)
-    if open_403:
+    if webview_403:
+        print(f"正在使用内置 WebView 打开页面用于验证: {url}")
+        open_webview(url)
+    elif open_403:
         print(f"正在打开浏览器页面用于验证: {url}")
         webbrowser.open(url)
         input("完成验证后按回车继续...")
     raise ReaderError(message)
 
 
-def request_page(session: requests.Session, url: str, open_403: bool) -> str:
+def request_page(session: requests.Session, url: str, open_403: bool, webview_403: bool) -> str:
     try:
         response = session.get(url)
         if response.status_code == 403:
-            handle_403(url, open_403)
+            handle_403(url, open_403, webview_403)
         if not response.ok:
             raise ReaderError(f"获取页面失败: HTTP {response.status_code}")
         return response.text
@@ -179,6 +197,7 @@ def send_timings(
     payload: dict[str, str],
     retries: int,
     open_403: bool,
+    webview_403: bool,
 ) -> None:
     headers = {
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -190,7 +209,7 @@ def send_timings(
         try:
             response = session.post(timings_url, data=payload, headers=headers)
             if response.status_code == 403:
-                handle_403(timings_url, open_403)
+                handle_403(timings_url, open_403, webview_403)
             if response.ok:
                 return
             if attempt < retries:
@@ -222,7 +241,7 @@ def login_if_needed(session: requests.Session, base_url: str, args: argparse.Nam
     if not args.username or not args.password:
         raise ReaderError("必须同时提供 --username 与 --password")
     login_url = urljoin(base_url.rstrip("/") + "/", "login")
-    html = request_page(session, login_url, args.open_403)
+    html = request_page(session, login_url, args.open_403, args.webview_403)
     csrf_token = extract_csrf(html)
     session_url = urljoin(base_url.rstrip("/") + "/", "session")
     headers = {
@@ -246,7 +265,7 @@ def read_topic(
     config: ReadConfig,
 ) -> None:
     ensure_topic_url(topic_url)
-    html = request_page(session, topic_url, config.open_403)
+    html = request_page(session, topic_url, config.open_403, config.webview_403)
     csrf_token = extract_csrf(html)
     current_position, total_replies = extract_replies_info(html)
     topic_id = topic_url.rstrip("/").split("/")[-1]
@@ -276,7 +295,15 @@ def read_topic(
             print(f"[DryRun] {start_id}-{end_id} ({progress}%)")
         else:
             print(f"发送 {start_id}-{end_id} ({progress}%)")
-            send_timings(session, csrf_token, base_url, payload, config.max_retries, config.open_403)
+            send_timings(
+                session,
+                csrf_token,
+                base_url,
+                payload,
+                config.max_retries,
+                config.open_403,
+                config.webview_403,
+            )
         delay_ms = config.base_delay + random.randint(0, config.random_delay)
         time.sleep(delay_ms / 1000)
         next_position = end_id + 1
@@ -287,11 +314,12 @@ def fetch_new_topics(
     base_url: str,
     limit: int,
     open_403: bool,
+    webview_403: bool,
 ) -> list[str]:
     new_url = urljoin(base_url.rstrip("/") + "/", "new.json")
     response = session.get(new_url)
     if response.status_code == 403:
-        handle_403(new_url, open_403)
+        handle_403(new_url, open_403, webview_403)
     if not response.ok:
         raise ReaderError(f"获取新帖子失败: HTTP {response.status_code}")
     data = response.json()
@@ -305,7 +333,12 @@ def fetch_new_topics(
     return urls
 
 
-def iter_topic_urls(args: argparse.Namespace, session: requests.Session, open_403: bool) -> Iterable[str]:
+def iter_topic_urls(
+    args: argparse.Namespace,
+    session: requests.Session,
+    open_403: bool,
+    webview_403: bool,
+) -> Iterable[str]:
     if args.topic_url:
         yield args.topic_url
         return
@@ -316,7 +349,7 @@ def iter_topic_urls(args: argparse.Namespace, session: requests.Session, open_40
     while True:
         if args.max_cycles and cycles >= args.max_cycles:
             break
-        urls = fetch_new_topics(session, args.base_url, args.max_topics, open_403)
+        urls = fetch_new_topics(session, args.base_url, args.max_topics, open_403, webview_403)
         for url in urls:
             if url in visited:
                 continue
@@ -338,6 +371,7 @@ def build_config(args: argparse.Namespace) -> ReadConfig:
         start_from_current=args.start_from_current,
         dry_run=args.dry_run,
         open_403=args.open_403,
+        webview_403=args.webview_403,
     )
 
 
@@ -359,7 +393,7 @@ def main() -> int:
         session = create_session(args)
         login_if_needed(session, args.base_url, args)
         config = build_config(args)
-        for topic_url in iter_topic_urls(args, session, args.open_403):
+        for topic_url in iter_topic_urls(args, session, args.open_403, args.webview_403):
             read_topic(session, topic_url, args.base_url, config)
         print("完成")
         return 0
