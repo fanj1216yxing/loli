@@ -36,7 +36,7 @@ python ldreader/linuxdo_reader.py \
 如果返回 403，可能触发了 Cloudflare 验证。请先在浏览器手动通过验证并登录后，再将浏览器 Cookie 传给脚本（`--cookie` 或 `--cookie-file`），或直接移除 `--username/--password` 并仅使用 Cookie。
 
 如果希望在遇到 403 时自动弹出页面以便手动验证，可以使用 `--open-403`，程序会打开浏览器并等待你完成验证后继续。
-如果需要在程序内打开 WebView 窗口，请使用 `--webview-403`，并先安装 `pywebview`（`pip install pywebview`）。
+如果需要在程序内打开 WebView 窗口，请使用 `--webview-403`，并先安装 `pywebview`（`pip install pywebview`）。若出现空白页，可尝试设置 `--webview-user-agent` 或改用 `--open-403`。
 
 ### 可选参数示例
 
